@@ -1,14 +1,17 @@
 import {IInputs, IOutputs} from "./generated/ManifestTypes";
 
-
 interface IDropdownOption{
 	key:string, text:string
 }
 
+export class SelectOptionSet implements ComponentFramework.StandardControl<IInputs, IOutputs> {
 
-export class SelectView implements ComponentFramework.StandardControl<IInputs, IOutputs> {
-	private currentValue: string | undefined;
+	constructor()
+	{
+
+	}
 	private notifyOutputChanged: () => void;
+	private currentValue: string | undefined;
 	entity:string="";
 	container:HTMLDivElement;
 	baseUrl:string;
@@ -17,14 +20,6 @@ export class SelectView implements ComponentFramework.StandardControl<IInputs, I
 	firstRun:Boolean =true;
 	isDisabled:boolean;
 	private comboBoxControl: HTMLSelectElement;
-	/**
-	 * Empty constructor.
-	 */
-	constructor()
-	{
-
-	}
-
 	/**
 	 * Used to initialize the control instance. Controls can kick off remote server calls and other initialization actions here.
 	 * Data-set values are not initialized here, use updateView.
@@ -35,21 +30,48 @@ export class SelectView implements ComponentFramework.StandardControl<IInputs, I
 	 */
 	public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void, state: ComponentFramework.Dictionary, container:HTMLDivElement)
 	{
-		this.notifyOutputChanged = notifyOutputChanged;		
+		// Add control initialization code
+		this.notifyOutputChanged = notifyOutputChanged;
+		
 		this.container=container;
 		this.baseUrl = (<any>context).page.getClientUrl();
 		this.context=context;
 		let comboBoxContainer = document.createElement("div");
         comboBoxContainer.className = "select-wrapper";
+
         this.comboBoxControl = document.createElement("select");
         this.comboBoxControl.className = "hdnComboBox";
-        this.comboBoxControl.addEventListener("change", this.onChange.bind(this));
+		this.comboBoxControl.addEventListener("change", this.onChange.bind(this));
+		this.comboBoxControl.addEventListener("click",this.onClick.bind(this));
         this.comboBoxControl.addEventListener("mouseenter", this.onMouseEnter.bind(this));
         this.comboBoxControl.addEventListener("mouseleave", this.onMouseLeave.bind(this));
-		this.comboBoxControl.addEventListener("click", this.onClick.bind(this));
+
         comboBoxContainer.appendChild(this.comboBoxControl);
-        container.appendChild(comboBoxContainer);     
+        container.appendChild(comboBoxContainer);
+		this.isDisabled=this.context.mode.isControlDisabled;
+      
 	}
+	private onChange(): void {
+        this.currentValue = this.comboBoxControl.value;
+        this.notifyOutputChanged();
+    }
+
+	private onClick(): void {
+		if (this.comboBoxControl.className="hdnComboBoxFocused"){
+		this.comboBoxControl.className = "hdnComboBoxClicked";
+		}
+		else {
+			this.comboBoxControl.className="hdnComboBoxFocused";
+		}
+    }
+
+    private onMouseEnter(): void {
+        this.comboBoxControl.className = "hdnComboBoxFocused";
+    }
+
+    private onMouseLeave(): void {
+        this.comboBoxControl.className = "hdnComboBox";
+    }
 
 
 	/**
@@ -58,11 +80,12 @@ export class SelectView implements ComponentFramework.StandardControl<IInputs, I
 	 */
 	public updateView(context: ComponentFramework.Context<IInputs>): void
 	{
-		this.isDisabled=this.context.mode.isControlDisabled;
-		var	entity=context.parameters.Entity.raw||"";	
+		
+		var entity=context.parameters.Entity.raw||"";
+
 		if (entity!==this.entity && entity!==""){
 			if (this.firstRun){
-				this.currentValue=context.parameters.View.raw||"";
+				this.currentValue=context.parameters.Attribute.raw||"";
 				this.firstRun=false;
 			}
 			else {
@@ -73,6 +96,8 @@ export class SelectView implements ComponentFramework.StandardControl<IInputs, I
 			this.populateComboBox(entity);
 			
 		}
+		
+		// Add code to update control view
 	}
 
 	/** 
@@ -80,9 +105,9 @@ export class SelectView implements ComponentFramework.StandardControl<IInputs, I
 	 * @returns an object based on nomenclature defined in manifest, expecting object[s] for property marked as “bound” or “output”
 	 */
 	public getOutputs(): IOutputs
-	{
+	{	
 		return {
-			View:this.currentValue
+			Attribute:this.currentValue
 		}
 	}
 
@@ -95,63 +120,42 @@ export class SelectView implements ComponentFramework.StandardControl<IInputs, I
 		// Add code to cleanup control if necessary
 	}
 
-	private onChange(): void {
-        this.currentValue = this.comboBoxControl.value;
-        this.notifyOutputChanged();
-    }
-
-    private onMouseEnter(): void {
-        this.comboBoxControl.className = "hdnComboBoxFocused";
-    }
-
-    private onMouseLeave(): void {
-        this.comboBoxControl.className = "hdnComboBox";
-	}
-	
-	private onClick(): void {
-		if (this.comboBoxControl.className="hdnComboBoxFocused"){
-			this.comboBoxControl.className = "hdnComboBoxClicked";
-		}
-		else {
-			this.comboBoxControl.className="hdnComboBoxFocused";
-		}
-	}
 
 	private async populateComboBox(entity:string) {
 		let selectOption = document.createElement("option");
 		if (entity!==""){
-			var a = await this.getViews(entity);
+			var a = await this.getEntities(entity);
 			var result = JSON.parse(a);
 			var options: IDropdownOption[]=[];
 			// format all the options into a usable record
-			
-			for (i = 0; i < result.value.length; i++) {
-				debugger;
-				if (result.value[i].name !== null && 
-					!result.value[i].savedqueryid.contains("000000") ) {
-					
-					var option = {
-					key: result.value[i].name + " (" + result.value[i].savedqueryid + ")",
-					text: result.value[i].name
-					};
+			for (var i = 0; i < result.value.length; i++) {
+				
+				if (result.value[i].DisplayName !== null && result.value[i].DisplayName.UserLocalizedLabel !== null) {
+					var text = result.value[i].DisplayName.UserLocalizedLabel.Label + " (" + result.value[i].LogicalName + ")";
+					var option: IDropdownOption = { key: result.value[i].LogicalName, text: text }
 					options.push(option);
+					
 				}
 			}
-			
 			// sort the items into alphabetical order by text.
-			options.sort((a, b) => a.text.localeCompare(b.text));			
+			options.sort((a, b) => a.text.localeCompare(b.text));
+			
+			// populate the select option box.
+
 			// firstly remove all existing options.
 			for(var i = this.comboBoxControl.options.length - 1 ; i >= 0 ; i--)
 			{
 				this.comboBoxControl.remove(i);
 			}
 
-			// add a top level empty option 
+			// add a top level empty option in case it's needed
+
 			selectOption = document.createElement("option");
 			selectOption.innerHTML="";
 			selectOption.value="";
 			this.comboBoxControl.add(selectOption);
-		
+			
+			
 			// add all the sorted records to the list.
 			for (let i = 0; i < options.length; i++) {
 				
@@ -164,19 +168,24 @@ export class SelectView implements ComponentFramework.StandardControl<IInputs, I
 						selectOption.selected = true;
 				//	valueWasChanged = false;
 				}
-				this.comboBoxControl.add(selectOption);		
+
+				this.comboBoxControl.add(selectOption);
+				
 			}
 		}
-		this.comboBoxControl.disabled=this.isDisabled;		
+		
+		this.comboBoxControl.disabled=this.isDisabled;
+		
+		
 	}
 
-	private async getViews(entity: string):Promise<string> {
+	private async getEntities(entity: string):Promise<string> {
 		var req = new XMLHttpRequest();
 		var baseUrl=this.baseUrl;
 		
 		return new Promise(function (resolve, reject) {
 
-			req.open("GET", baseUrl + "/api/data/v9.1/savedqueries?$top=5000&$select=name,isuserdefined,returnedtypecode,isdefault,isprivate&$filter=returnedtypecode eq '"+entity+"' and isprivate eq false", true);
+			req.open("GET", baseUrl + "/api/data/v9.1/EntityDefinitions(LogicalName='"+entity+"')/Attributes?$filter=AttributeType%20eq%20%27Picklist%27", true);
 			req.onreadystatechange = function () {
 				
 				if (req.readyState !== 4) return;
@@ -214,5 +223,4 @@ export class SelectView implements ComponentFramework.StandardControl<IInputs, I
 			req.send();
 		});
 	}
-
 }
